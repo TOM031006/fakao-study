@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>法考学习追踪器</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 侧栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">⚖️</span> 法考追踪器
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-route="dashboard" onclick="FK.router.navigate('#dashboard')">
+          <span class="nav-icon">📊</span> 仪表盘
+        </a>
+        <a class="nav-item" data-route-path="practice" onclick="FK.router.navigate('#practice/daily')">
+          <span class="nav-icon">📝</span> 每日练习
+        </a>
+        <a class="nav-item" data-route="subjects" onclick="FK.router.navigate('#subjects')">
+          <span class="nav-icon">📚</span> 分科练习
+        </a>
+        <a class="nav-item" data-route="review" onclick="FK.router.navigate('#review')">
+          <span class="nav-icon">🔄</span> 错题复习
+        </a>
+        <a class="nav-item" data-route="analytics" onclick="FK.router.navigate('#analytics')">
+          <span class="nav-icon">📈</span> 学习分析
+        </a>
+        <a class="nav-item" data-route="import" onclick="FK.router.navigate('#import')">
+          <span class="nav-icon">📥</span> 题库导入
+        </a>
+        <a class="nav-item" data-route="questions" onclick="FK.router.navigate('#questions')">
+          <span class="nav-icon">📋</span> 题库管理
+        </a>
+        <a class="nav-item" data-route="settings" onclick="FK.router.navigate('#settings')">
+          <span class="nav-icon">⚙️</span> 设置
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="sidebar-streak">🔥 加载中...</div>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <div class="main-area">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <span class="topbar-title" id="topbar-title">📊 学习仪表盘</span>
+        <div class="topbar-right">
+          <span class="topbar-streak" id="topbar-streak">🔥 0天</span>
+          <span style="font-size:13px;color:var(--text-secondary);" id="topbar-today-count">0题</span>
+        </div>
+      </header>
+
+      <!-- 内容区域 -->
+      <main class="content-area" id="app-content">
+        <div style="text-align:center;padding:100px 20px;">
+          <div style="font-size:48px;margin-bottom:16px;">⚖️</div>
+          <h2>法考学习追踪器</h2>
+          <p style="color:var(--text-secondary);">加载中...</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast容器 -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ===== 数据文件 ===== -->
+  <script src="data/subjects.js"></script>
+  <script src="data/questions-jurisprudence.js"></script>
+  <script src="data/questions-2025.js"></script>
+  <script src="data/questions-2024.js"></script>
+  <script src="data/questions-civil.js"></script>
+
+  <!-- ===== 核心引擎 ===== -->
+  <script src="js/utils.js"></script>
+  <script src="js/models.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/questionBank.js"></script>
+  <script src="js/spacedRepetition.js"></script>
+  <script src="js/testGenerator.js"></script>
+  <script src="js/analytics.js"></script>
+  <script src="js/import.js"></script>
+
+  <!-- ===== 视图 ===== -->
+  <script src="js/views/dashboard.js"></script>
+  <script src="js/views/practice.js"></script>
+  <script src="js/views/subject.js"></script>
+  <script src="js/views/review.js"></script>
+  <script src="js/views/analytics.js"></script>
+  <script src="js/views/import.js"></script>
+
+  <!-- ===== 路由 ===== -->
+  <script src="js/router.js"></script>
+
+  <!-- ===== 应用入口（最后加载） ===== -->
+  <script src="js/app.js"></script>
+
+  <!-- ===== 可选库：按需通过 CDN 加载 ===== -->
+  <script>
+    // 动态加载 Chart.js
+    (function() {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      s.onerror = function() { console.warn('Chart.js CDN 加载失败，图表不可用。'); };
+      document.head.appendChild(s);
+    })();
+
+    // 动态加载 PDF.js（用于PDF导入）
+    (function() {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+      s.onload = function() {
+        // 设置 worker
+        if (typeof pdfjsLib !== 'undefined') {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        }
+      };
+      s.onerror = function() { console.warn('PDF.js CDN 加载失败，PDF导入不可用。'); };
+      document.head.appendChild(s);
+    })();
+
+    // 动态加载 mammoth.js（用于Word导入）
+    (function() {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js';
+      s.onerror = function() { console.warn('mammoth.js CDN 加载失败，Word导入不可用。'); };
+      document.head.appendChild(s);
+    })();
+  </script>
+</body>
+</html>
