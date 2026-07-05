@@ -303,7 +303,7 @@ FK.app = {
   _renderCards(el) {
     const cards = window.FK_SEED_DATA?.civilCh1Cards || [];
     if (cards.length === 0) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🃏</div><h2>暂无背诵卡片</h2><p>请导入背诵资料后使用</p></div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🃏</div><h2>暂无背诵卡片</h2></div>';
       return;
     }
 
@@ -317,43 +317,50 @@ FK.app = {
     el.innerHTML = `
       <div class="fade-in">
         <h1 class="page-title">🃏 背诵卡片 · 民法第一章</h1>
-        <p style="color:var(--text-muted);margin-bottom:16px;">${cards.length} 张卡片 · 点击卡片翻转查看答案</p>
+        <p style="color:var(--text-muted);margin-bottom:16px;">${cards.length} 张卡片 · 点击翻转查看答案和填空练习</p>
         <div id="cards-container"></div>
       </div>
     `;
+    this._renderCardList(sections);
+  },
 
+  _renderCardList(sections) {
     const container = document.getElementById('cards-container');
+    if (!container) return;
     let html = '';
 
     for (const [section, sectionCards] of Object.entries(sections)) {
-      html += `<h2 style="margin:20px 0 10px;font-size:16px;color:var(--text-secondary);">${section}</h2>`;
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">';
+      html += `<h3 style="margin:20px 0 10px;font-size:15px;color:var(--text-secondary);border-bottom:1px solid var(--border);padding-bottom:6px;">${section}</h3>`;
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;">';
 
-      sectionCards.forEach(c => {
-        const q = (c.content?.stem || '').replace(/📖[^\n]+\n\n❓\s*/, '');
-        const a = (c.content?.answer || [])[0] || '';
-        // Remove the question part from answer (they overlap)
-        const pureAnswer = a.substring(Math.min(a.length, q.length + 10));
+      sectionCards.forEach((c, idx) => {
+        const concept = c.concept || c.knowledgePoint || '';
+        const answer = (c.content?.answer || [])[0] || '';
+        const cloze = c.content?.cloze || '';
+        const uid = 'card_' + section.replace(/[^\w]/g,'') + '_' + idx;
 
         html += `
-          <div class="flashcard" style="background:var(--card-bg);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);cursor:pointer;min-height:150px;perspective:1000px;"
-            onclick="this.querySelector('.card-inner').classList.toggle('flipped')">
-            <div class="card-inner" style="position:relative;width:100%;min-height:150px;transition:transform 0.5s;">
-              <div class="card-front" style="padding:16px;">
-                <div style="font-size:14px;color:var(--primary);font-weight:600;margin-bottom:4px;">📖 ${c.knowledgePoint}</div>
-                <div style="font-size:14px;line-height:1.6;">${FK.utils.escapeHtml(q.substring(0,200))}</div>
-              </div>
-              <div class="card-back" style="display:none;padding:16px;">
-                <div style="font-size:13px;color:var(--success);font-weight:600;margin-bottom:6px;">✅ 答案</div>
-                <div style="font-size:13px;line-height:1.7;max-height:300px;overflow-y:auto;">${FK.utils.escapeHtml(pureAnswer.substring(0,500))}</div>
+          <div class="flashcard" style="background:var(--card-bg);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);cursor:pointer;min-height:160px;border:1px solid var(--border);overflow:hidden;"
+            onclick="FK.app._flipCard('${uid}')">
+            <div id="${uid}-front" style="padding:24px;display:flex;align-items:center;justify-content:center;text-align:center;min-height:160px;">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${c.section||''}</div>
+                <div style="font-size:18px;font-weight:700;color:var(--primary);line-height:1.5;">${FK.utils.escapeHtml(concept)}</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:10px;">👆 点击查看答案</div>
               </div>
             </div>
+            <div id="${uid}-back" style="display:none;padding:20px;background:#f8fdf8;min-height:160px;">
+              <div style="font-size:13px;color:var(--success);font-weight:600;margin-bottom:10px;">✅ 参考答案</div>
+              <div style="font-size:14px;line-height:1.9;white-space:pre-wrap;margin-bottom:16px;">${FK.utils.escapeHtml(answer)}</div>
+              ${cloze ? `
+                <div style="border-top:1px dashed var(--border);padding-top:14px;margin-top:8px;">
+                  <div style="font-size:13px;color:var(--warning);font-weight:600;margin-bottom:8px;">✍️ 填空自测</div>
+                  <div style="font-size:14px;line-height:2.2;white-space:pre-wrap;color:var(--text);">${FK.utils.escapeHtml(cloze)}</div>
+                </div>
+              ` : ''}
+              <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--text-muted);">👆 再次点击翻回正面</div>
+            </div>
           </div>
-          <style>
-            .flashcard:hover { box-shadow: var(--shadow-md); }
-            .card-inner.flipped .card-front { display: none; }
-            .card-inner.flipped .card-back { display: block; }
-          </style>
         `;
       });
 
@@ -361,6 +368,26 @@ FK.app = {
     }
 
     container.innerHTML = html;
+    // 全局翻转样式
+    if (!document.getElementById('flashcard-styles')) {
+      const style = document.createElement('style');
+      style.id = 'flashcard-styles';
+      style.textContent = '.flashcard:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);transition:all 0.2s;}';
+      document.head.appendChild(style);
+    }
+  },
+
+  _flipCard(uid) {
+    const front = document.getElementById(uid + '-front');
+    const back = document.getElementById(uid + '-back');
+    if (!front || !back) return;
+    if (back.style.display === 'none') {
+      front.style.display = 'none';
+      back.style.display = 'block';
+    } else {
+      back.style.display = 'none';
+      front.style.display = 'flex';
+    }
   },
 
   _resetAll() {
