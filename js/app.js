@@ -85,6 +85,9 @@ FK.app = {
     // 题库管理
     FK.router.register('questions', (el) => this._renderQuestionManager(el));
 
+    // 背诵卡片
+    FK.router.register('cards', (el) => this._renderCards(el));
+
     // 设置
     FK.router.register('settings', (el) => this._renderSettings(el));
   },
@@ -294,6 +297,70 @@ FK.app = {
       this._toast('进度已重置 ⚠️', 'warning');
       setTimeout(() => FK.router.navigate('#dashboard'), 300);
     }
+  },
+
+  // ===== 背诵卡片页面 =====
+  _renderCards(el) {
+    const cards = window.FK_SEED_DATA?.civilCh1Cards || [];
+    if (cards.length === 0) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🃏</div><h2>暂无背诵卡片</h2><p>请导入背诵资料后使用</p></div>';
+      return;
+    }
+
+    const sections = {};
+    cards.forEach(c => {
+      const s = c.section || '其他';
+      if (!sections[s]) sections[s] = [];
+      sections[s].push(c);
+    });
+
+    el.innerHTML = `
+      <div class="fade-in">
+        <h1 class="page-title">🃏 背诵卡片 · 民法第一章</h1>
+        <p style="color:var(--text-muted);margin-bottom:16px;">${cards.length} 张卡片 · 点击卡片翻转查看答案</p>
+        <div id="cards-container"></div>
+      </div>
+    `;
+
+    const container = document.getElementById('cards-container');
+    let html = '';
+
+    for (const [section, sectionCards] of Object.entries(sections)) {
+      html += `<h2 style="margin:20px 0 10px;font-size:16px;color:var(--text-secondary);">${section}</h2>`;
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">';
+
+      sectionCards.forEach(c => {
+        const q = (c.content?.stem || '').replace(/📖[^\n]+\n\n❓\s*/, '');
+        const a = (c.content?.answer || [])[0] || '';
+        // Remove the question part from answer (they overlap)
+        const pureAnswer = a.substring(Math.min(a.length, q.length + 10));
+
+        html += `
+          <div class="flashcard" style="background:var(--card-bg);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);cursor:pointer;min-height:150px;perspective:1000px;"
+            onclick="this.querySelector('.card-inner').classList.toggle('flipped')">
+            <div class="card-inner" style="position:relative;width:100%;min-height:150px;transition:transform 0.5s;">
+              <div class="card-front" style="padding:16px;">
+                <div style="font-size:14px;color:var(--primary);font-weight:600;margin-bottom:4px;">📖 ${c.knowledgePoint}</div>
+                <div style="font-size:14px;line-height:1.6;">${FK.utils.escapeHtml(q.substring(0,200))}</div>
+              </div>
+              <div class="card-back" style="display:none;padding:16px;">
+                <div style="font-size:13px;color:var(--success);font-weight:600;margin-bottom:6px;">✅ 答案</div>
+                <div style="font-size:13px;line-height:1.7;max-height:300px;overflow-y:auto;">${FK.utils.escapeHtml(pureAnswer.substring(0,500))}</div>
+              </div>
+            </div>
+          </div>
+          <style>
+            .flashcard:hover { box-shadow: var(--shadow-md); }
+            .card-inner.flipped .card-front { display: none; }
+            .card-inner.flipped .card-back { display: block; }
+          </style>
+        `;
+      });
+
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
   },
 
   _resetAll() {
