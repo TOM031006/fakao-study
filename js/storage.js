@@ -238,7 +238,8 @@ FK.storage = {
       window.FK_SEED_DATA?.jurisprudenceQuestions || [],
       window.FK_SEED_DATA?.wuda2025 || [],
       window.FK_SEED_DATA?.wuda2024 || [],
-      window.FK_SEED_DATA?.civilQuestions || []
+      window.FK_SEED_DATA?.civilQuestions || [],
+      window.FK_SEED_DATA?.civilCh1Cards || []
     ];
     const custom = this.getCustomQuestions();
     const customIds = new Set(custom.map(q => q.id));
