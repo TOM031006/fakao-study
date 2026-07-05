@@ -88,6 +88,9 @@ FK.app = {
     // 背诵卡片
     FK.router.register('cards', (el) => this._renderCards(el));
 
+    // 随机背诵
+    FK.router.register('recite', (el) => this._renderRecite(el));
+
     // 设置
     FK.router.register('settings', (el) => this._renderSettings(el));
   },
@@ -299,94 +302,285 @@ FK.app = {
     }
   },
 
-  // ===== 背诵卡片页面 =====
+  // ===== 背诵卡片页面（Studley风格：掌握度追踪+评级） =====
+  _getCardMastery() { try { return JSON.parse(localStorage.getItem('fk_card_mastery')||'{}'); } catch(e) { return {}; } },
+  _saveCardMastery(d) { localStorage.setItem('fk_card_mastery', JSON.stringify(d)); },
+
   _renderCards(el) {
-    const cards = window.FK_SEED_DATA?.civilCh1Cards || [];
-    if (cards.length === 0) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">🃏</div><h2>暂无背诵卡片</h2></div>';
+    const ch1=window.FK_SEED_DATA?.civilCh1Cards||[], ch2=window.FK_SEED_DATA?.civilCh2Cards||[];
+    this._cardChapters=[{name:'第一章 民法概述',cards:ch1},{name:'第二章 基本原则',cards:ch2}].filter(c=>c.cards.length>0);
+    if(!this._cardChapters.length){el.innerHTML='<div class=\"empty-state\"><div class=\"empty-icon\">🃏</div><h2>暂无背诵卡片</h2></div>';return;}
+    this._currentCardChapter=0; this._cardFilter='all'; this._renderCardPage(el);
+  },
+
+  _renderCardPage(el) {
+    const mastery=this._getCardMastery();
+    const ch=this._cardChapters[this._currentCardChapter];
+    let filtered=ch.cards;
+    if(this._cardFilter==='learning') filtered=ch.cards.filter(c=>!mastery[c.id]||mastery[c.id]<2);
+    if(this._cardFilter==='mastered') filtered=ch.cards.filter(c=>mastery[c.id]>=2);
+    const mastered=ch.cards.filter(c=>mastery[c.id]>=2).length;
+    const learning=ch.cards.filter(c=>mastery[c.id]===1).length;
+    const pct=Math.round(mastered/Math.max(ch.cards.length,1)*100);
+
+    const sections={}; filtered.forEach(c=>{const s=c.section||'其他';if(!sections[s])sections[s]=[];sections[s].push(c);});
+
+    el.innerHTML=`
+      <div class="fade-in">
+        <div class="card" style="margin-bottom:14px;padding:16px 20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div style="font-size:17px;font-weight:700;">${ch.name}</div>
+              <div style="font-size:12px;color:var(--text-muted);">${filtered.length}张 · ${mastered}已掌握 · ${learning}学习中</div>
+            </div>
+            <div style="text-align:right;"><div style="font-size:26px;font-weight:700;color:${pct>=70?'var(--success)':pct>=30?'var(--warning)':'var(--text-muted)'};">${pct}%</div><div style="font-size:10px;color:var(--text-muted);">掌握度</div></div>
+          </div>
+          <div class="progress-bar" style="margin-top:10px;height:6px;"><div class="progress-fill ${pct>=70?'success':pct>=30?'warning':'error'}" style="width:${Math.max(pct,3)}%;"></div></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+          ${this._cardChapters.map((c,i)=>`<button class="btn btn-sm ${i===this._currentCardChapter?'btn-primary':'btn-outline'}" onclick="FK.app._switchChapter(${i})">${c.name.split(' ')[0]}</button>`).join('')}
+          <span style="color:var(--border);">|</span>
+          <button class="btn btn-sm ${this._cardFilter==='all'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('all')">全部</button>
+          <button class="btn btn-sm ${this._cardFilter==='learning'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('learning')">🟡 学习中</button>
+          <button class="btn btn-sm ${this._cardFilter==='mastered'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('mastered')">🟢 已掌握</button>
+        </div>
+        <div id="cards-container"></div>
+      </div>`;
+    this._renderCardList(sections);
+  },
+  _switchChapter(i){this._currentCardChapter=i;this._renderCardPage(document.getElementById('app-content'));},
+  _setCardFilter(f){this._cardFilter=f;this._renderCardPage(document.getElementById('app-content'));},
+
+  _renderCardList(sections) {
+    const container=document.getElementById('cards-container');if(!container)return;
+    const mastery=this._getCardMastery();let html='';
+    for(const[sec,cards]of Object.entries(sections)){
+      html+=`<h3 style="margin:18px 0 8px;font-size:14px;color:var(--text-secondary);border-bottom:1px solid var(--border);padding-bottom:6px;">${sec}</h3><div style="display:flex;flex-direction:column;gap:12px;">`;
+      cards.forEach(c=>{
+        const concept=c.concept||'',cloze=c.content?.cloze||'',uid='crd_'+c.id,m=mastery[c.id]||0;
+        const mColor=m>=2?'var(--success)':m===1?'var(--warning)':'var(--text-muted)';
+        const mEmoji=m>=2?'⭐':m===1?'📖':'🆕';
+        html+=`
+          <div class="flashcard" style="background:var(--card-bg);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);border:1px solid ${m>=2?'var(--success)':m===1?'var(--warning)':'var(--border)'};overflow:hidden;">
+            <div id="${uid}-front" onclick="FK.app._flipCard('${uid}')" style="padding:20px;cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center;">
+              <div>
+                <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-bottom:8px;">
+                  <span style="font-size:12px;color:${mColor};">${mEmoji}</span><span style="font-size:11px;color:var(--text-muted);">${c.section||''}</span>
+                </div>
+                <div style="font-size:16px;font-weight:700;color:var(--text);line-height:1.5;">${FK.utils.escapeHtml(concept)}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:10px;">点击翻转 →</div>
+              </div>
+            </div>
+            <div id="${uid}-back" style="display:none;padding:18px;background:#fafafa;">
+              ${cloze?`<div style="font-size:11px;color:var(--warning);font-weight:600;margin-bottom:6px;">✍️ 填空自测</div><div id="${uid}-cloze" data-cloze="${FK.utils.escapeHtml(cloze)}" style="font-size:15px;line-height:2.2;padding:12px;background:#fff;border-radius:6px;border:1px dashed var(--warning);white-space:pre-wrap;">${FK.app._renderClozeText(cloze,false)}</div>`:''}
+              <div id="${uid}-hint" style="text-align:center;margin:8px 0;font-size:12px;color:var(--primary);cursor:pointer;" onclick="FK.app._flipCard('${uid}')">👆 点击显示答案</div>
+              <div style="display:flex;gap:6px;margin-top:10px;">
+                <button class="btn btn-sm" style="flex:1;background:${m===2?'var(--success)':'var(--bg)'};color:${m===2?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',2)">⭐ 会了</button>
+                <button class="btn btn-sm" style="flex:1;background:${m===1?'var(--warning)':'var(--bg)'};color:${m===1?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',1)">📖 不熟</button>
+                <button class="btn btn-sm" style="flex:1;background:${m===0?'var(--error)':'var(--bg)'};color:${m===0?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',0)">🔄 重学</button>
+              </div>
+            </div>
+          </div>`;
+      });
+      html+='</div>';
+    }
+    container.innerHTML=html;
+    if(!document.getElementById('flashcard-styles')){const s=document.createElement('style');s.id='flashcard-styles';s.textContent='.flashcard:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}';document.head.appendChild(s);}
+  },
+
+  _rateCard(cardId,level){const m=this._getCardMastery();m[cardId]=level;this._saveCardMastery(m);this._renderCardPage(document.getElementById('app-content'));FK.app._toast(level>=2?'⭐ 已掌握！':level===1?'📖 继续加油':'🔄 重新学习',level>=2?'success':level===1?'warning':'info');},
+
+  _flipCard(uid){const f=document.getElementById(uid+'-front'),b=document.getElementById(uid+'-back'),c=document.getElementById(uid+'-cloze'),h=document.getElementById(uid+'-hint');if(!f||!b)return;if(b.style.display==='none'){f.style.display='none';b.style.display='block';if(h)h.style.display='block';}else if(c&&c.dataset.revealed!=='true'){c.innerHTML=FK.app._renderClozeText(c.dataset.cloze||'',true);c.dataset.revealed='true';if(h)h.style.display='none';}else{b.style.display='none';f.style.display='flex';if(c){c.dataset.revealed='false';c.innerHTML=FK.app._renderClozeText(c.dataset.cloze||'',false);}if(h)h.style.display='block';}},
+
+  _renderClozeText(t,r){if(!t)return'（暂无填空）';const e=FK.utils.escapeHtml(t);return r?e.replace(/【(.+?)】/g,'<span style="color:#C41E3A;font-weight:700;background:#FFEBEE;padding:1px 5px;border-radius:3px;">$1</span>'):e.replace(/【(.+?)】/g,'<span style="border-bottom:3px solid var(--warning);padding:0 14px;margin:0 3px;color:var(--text-muted);font-size:12px;">?</span>');},
+
+  // ===== 随机背诵页面 =====
+  _getCustomCloze() { try { return JSON.parse(localStorage.getItem('fk_custom_cloze')||'{}'); } catch(e) { return {}; } },
+  _saveCustomCloze(d) { localStorage.setItem('fk_custom_cloze', JSON.stringify(d)); },
+
+  _renderRecite(el) {
+    const allCards = [...(window.FK_SEED_DATA?.civilCh1Cards||[]), ...(window.FK_SEED_DATA?.civilCh2Cards||[])];
+    if (!allCards.length) { el.innerHTML='<div class="empty-state"><div class="empty-icon">🎯</div><h2>暂无背诵卡片</h2></div>'; return; }
+
+    // 随机打乱
+    const shuffled = FK.utils.shuffle([...allCards]);
+    this._reciteCards = shuffled;
+    this._reciteIdx = 0;
+    this._reciteRevealed = false;
+    this._blankHistory = [];
+    this._renderReciteCard(el);
+  },
+
+  _renderReciteCard(el) {
+    const cards = this._reciteCards;
+    const idx = this._reciteIdx;
+    if (idx >= cards.length) {
+      el.innerHTML = `<div class="fade-in" style="text-align:center;padding:60px 20px;">
+        <div style="font-size:64px;">🎉</div><h2>本轮背诵完成！</h2>
+        <button class="btn btn-primary btn-lg" onclick="FK.app._renderRecite(document.getElementById('app-content'))">🔄 重新开始</button>
+        <button class="btn btn-secondary btn-lg" onclick="FK.router.navigate('#cards')">🃏 回卡片列表</button>
+      </div>`;
       return;
     }
 
-    const sections = {};
-    cards.forEach(c => {
-      const s = c.section || '其他';
-      if (!sections[s]) sections[s] = [];
-      sections[s].push(c);
-    });
+    const card = cards[idx];
+    const concept = card.concept || '';
+    let answer = (card.content?.answer||[])[0] || '';
+    const customCloze = this._getCustomCloze();
+    const saved = customCloze[card.id] || [];
+
+    // Apply saved blanks to answer text
+    let hasBlanks = false;
+    for (const b of saved) {
+      if (answer.includes(b.text)) {
+        answer = answer.replace(b.text, `<span data-original="${FK.utils.escapeHtml(b.text)}" style="border-bottom:2px solid var(--warning);padding:0 10px;margin:0 2px;color:var(--text-muted);font-size:13px;">（${'_'.repeat(Math.max(2, b.text.length/2))}）</span>`);
+        hasBlanks = true;
+      }
+    }
+    // Only escape if no saved blanks (otherwise trust the HTML we built)
+    const displayAnswer = hasBlanks ? answer : FK.utils.escapeHtml(answer);
+
+    // Reset history for new card
+    this._blankHistory = [];
+    this._reciteClozeModified = false;
 
     el.innerHTML = `
-      <div class="fade-in">
-        <h1 class="page-title">🃏 背诵卡片 · 民法第一章</h1>
-        <p style="color:var(--text-muted);margin-bottom:16px;">${cards.length} 张卡片 · 点击翻转查看答案和填空练习</p>
-        <div id="cards-container"></div>
+      <div class="fade-in" style="max-width:800px;margin:0 auto;">
+        <!-- 进度 -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+          <span style="font-size:13px;color:var(--text-secondary);">🎯 随机背诵</span>
+          <div class="progress-bar" style="flex:1;"><div class="progress-fill primary" style="width:${((idx+1)/cards.length)*100}%;"></div></div>
+          <span style="font-size:13px;font-weight:600;">${idx+1}/${cards.length}</span>
+        </div>
+
+        <!-- 题目标题 -->
+        <div class="card" style="margin-bottom:12px;text-align:center;padding:24px;">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">${card.section||''}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--primary);line-height:1.5;">${FK.utils.escapeHtml(concept)}</div>
+          ${!this._reciteRevealed ? `<div style="font-size:13px;color:var(--text-muted);margin-top:12px;">👇 点击下方查看答案</div>` : ''}
+        </div>
+
+        <!-- 答案区（可点击挖空） -->
+        <div class="card" style="padding:20px;min-height:100px;cursor:${this._reciteRevealed?'default':'pointer'};"
+          onclick="${this._reciteRevealed ? '' : "FK.app._revealRecite()"}">
+          ${!this._reciteRevealed ? `
+            <div style="text-align:center;padding:30px;color:var(--text-muted);">
+              <div style="font-size:36px;margin-bottom:8px;">🔍</div>
+              <div>点击此处查看完整答案</div>
+            </div>
+          ` : `
+            <div id="recite-answer-text" style="font-size:15px;line-height:2.4;white-space:pre-wrap;padding:12px;background:#fff;border-radius:6px;border:1px solid var(--border);">${displayAnswer}</div>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-sm btn-outline" onclick="FK.app._blankSelected()">✂️ 挖空选中文字</button>
+              <button class="btn btn-sm btn-outline" onclick="FK.app._undoLastBlank()">↩️ 撤销</button>
+              <span style="font-size:12px;color:var(--text-muted);">选中文字→点按钮挖空</span>
+            </div>
+          `}
+        </div>
+
+        <!-- 操作按钮 -->
+        <div style="display:flex;gap:10px;margin-top:14px;justify-content:center;flex-wrap:wrap;">
+          ${this._reciteRevealed ? `
+            <button class="btn btn-primary" onclick="FK.app._saveReciteCloze('${card.id}')">💾 保存挖空</button>
+            <button class="btn btn-outline" onclick="FK.app._resetReciteCloze()">🔄 重置</button>
+          ` : ''}
+          <button class="btn btn-secondary" onclick="FK.app._prevReciteCard()" ${idx===0?'disabled':''}>← 上一张</button>
+          <button class="btn btn-primary" onclick="FK.app._nextReciteCard()">下一张 →</button>
+        </div>
       </div>
     `;
-    this._renderCardList(sections);
   },
 
-  _renderCardList(sections) {
-    const container = document.getElementById('cards-container');
-    if (!container) return;
-    let html = '';
-
-    for (const [section, sectionCards] of Object.entries(sections)) {
-      html += `<h3 style="margin:20px 0 10px;font-size:15px;color:var(--text-secondary);border-bottom:1px solid var(--border);padding-bottom:6px;">${section}</h3>`;
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;">';
-
-      sectionCards.forEach((c, idx) => {
-        const concept = c.concept || c.knowledgePoint || '';
-        const answer = (c.content?.answer || [])[0] || '';
-        const cloze = c.content?.cloze || '';
-        const uid = 'card_' + section.replace(/[^\w]/g,'') + '_' + idx;
-
-        html += `
-          <div class="flashcard" style="background:var(--card-bg);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);cursor:pointer;min-height:160px;border:1px solid var(--border);overflow:hidden;"
-            onclick="FK.app._flipCard('${uid}')">
-            <div id="${uid}-front" style="padding:24px;display:flex;align-items:center;justify-content:center;text-align:center;min-height:160px;">
-              <div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${c.section||''}</div>
-                <div style="font-size:18px;font-weight:700;color:var(--primary);line-height:1.5;">${FK.utils.escapeHtml(concept)}</div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:10px;">👆 点击查看答案</div>
-              </div>
-            </div>
-            <div id="${uid}-back" style="display:none;padding:20px;background:#f8fdf8;min-height:160px;">
-              <div style="font-size:13px;color:var(--success);font-weight:600;margin-bottom:10px;">✅ 参考答案</div>
-              <div style="font-size:14px;line-height:1.9;white-space:pre-wrap;margin-bottom:16px;">${FK.utils.escapeHtml(answer)}</div>
-              ${cloze ? `
-                <div style="border-top:1px dashed var(--border);padding-top:14px;margin-top:8px;">
-                  <div style="font-size:13px;color:var(--warning);font-weight:600;margin-bottom:8px;">✍️ 填空自测</div>
-                  <div style="font-size:14px;line-height:2.2;white-space:pre-wrap;color:var(--text);">${FK.utils.escapeHtml(cloze)}</div>
-                </div>
-              ` : ''}
-              <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--text-muted);">👆 再次点击翻回正面</div>
-            </div>
-          </div>
-        `;
-      });
-
-      html += '</div>';
+  _splitIntoWords(text) {
+    const parts = text.split(/([，。、；：！？\n（）""''【】《》\s])/);
+    const words = [];
+    for (const p of parts) {
+      if (!p) continue;
+      if (/^[，。、；：！？\n（）""''【】《》\s]+$/.test(p)) { words.push(p); }
+      else {
+        // 固定按2字一组分割，保证一致性
+        for (let i = 0; i < p.length; i += 2) {
+          words.push(p.substring(i, Math.min(i+2, p.length)));
+        }
+      }
     }
+    return words;
+  },
 
-    container.innerHTML = html;
-    // 全局翻转样式
-    if (!document.getElementById('flashcard-styles')) {
-      const style = document.createElement('style');
-      style.id = 'flashcard-styles';
-      style.textContent = '.flashcard:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);transition:all 0.2s;}';
-      document.head.appendChild(style);
+  _revealRecite() { this._reciteRevealed = true; this._renderReciteCard(document.getElementById('app-content')); },
+
+  _blankHistory: [], // 撤销历史
+
+  _blankSelected() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed) { alert('请先选中要挖空的文字'); return; }
+    const range = sel.getRangeAt(0);
+    const text = range.toString().trim();
+    if (!text) return;
+
+    // Save to history for undo
+    this._blankHistory.push({ range, text, cardId: this._reciteCards[this._reciteIdx].id });
+
+    // Replace selected text with blank brackets
+    const span = document.createElement('span');
+    span.style.borderBottom = '2px solid var(--warning)';
+    span.style.padding = '0 12px';
+    span.style.margin = '0 2px';
+    span.style.color = 'var(--text-muted)';
+    span.style.fontSize = '13px';
+    span.textContent = '（' + '_'.repeat(Math.max(2, text.length/2)) + '）';
+    span.title = text; // Store original text in title
+    span.dataset.original = text;
+
+    range.deleteContents();
+    range.insertNode(span);
+    sel.removeAllRanges();
+
+    // Update cloze words tracking
+    this._reciteClozeModified = true;
+  },
+
+  _undoLastBlank() {
+    if (!this._blankHistory.length) { alert('没有可撤销的操作'); return; }
+    const last = this._blankHistory.pop();
+    const spans = document.querySelectorAll('#recite-answer-text span[data-original]');
+    // Find the last span and restore
+    for (let i = spans.length - 1; i >= 0; i--) {
+      if (spans[i].dataset.original === last.text) {
+        spans[i].replaceWith(document.createTextNode(last.text));
+        break;
+      }
     }
   },
 
-  _flipCard(uid) {
-    const front = document.getElementById(uid + '-front');
-    const back = document.getElementById(uid + '-back');
-    if (!front || !back) return;
-    if (back.style.display === 'none') {
-      front.style.display = 'none';
-      back.style.display = 'block';
-    } else {
-      back.style.display = 'none';
-      front.style.display = 'flex';
+  _saveReciteCloze(cardId) {
+    const custom = this._getCustomCloze();
+    const spans = document.querySelectorAll('#recite-answer-text span[data-original]');
+    const blanked = [];
+    spans.forEach(s => { blanked.push({ text: s.dataset.original, idx: blanked.length }); });
+    custom[cardId] = blanked;
+    this._saveCustomCloze(custom);
+    FK.app._toast(`💾 已保存 ${blanked.length} 个挖空`, 'success');
+  },
+
+  _resetReciteCloze() {
+    this._blankHistory = [];
+    this._renderReciteCard(document.getElementById('app-content'));
+  },
+
+  _nextReciteCard() {
+    this._reciteRevealed = false;
+    this._reciteClozeWords = {};
+    this._reciteIdx++;
+    this._renderReciteCard(document.getElementById('app-content'));
+  },
+
+  _prevReciteCard() {
+    if (this._reciteIdx > 0) {
+      this._reciteRevealed = false;
+      this._reciteClozeWords = {};
+      this._reciteIdx--;
+      this._renderReciteCard(document.getElementById('app-content'));
     }
   },
 
