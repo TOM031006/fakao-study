@@ -17,32 +17,18 @@
       </div>
 
       <nav class="sidebar-nav">
-        <a class="nav-item active" data-route="dashboard" onclick="FK.router.navigate('#dashboard')">
-          <span class="nav-icon">📊</span> 仪表盘
-        </a>
-        <a class="nav-item" data-route-path="practice" onclick="FK.router.navigate('#practice/daily')">
-          <span class="nav-icon">📝</span> 每日练习
-        </a>
-        <a class="nav-item" data-route="subjects" onclick="FK.router.navigate('#subjects')">
-          <span class="nav-icon">📚</span> 分科练习
-        </a>
-        <a class="nav-item" data-route="review" onclick="FK.router.navigate('#review')">
-          <span class="nav-icon">🔄</span> 错题复习
-        </a>
-        <a class="nav-item" data-route="analytics" onclick="FK.router.navigate('#analytics')">
-          <span class="nav-icon">📈</span> 学习分析
-        </a>
-        <a class="nav-item" data-route="import" onclick="FK.router.navigate('#import')">
-          <span class="nav-icon">📥</span> 题库导入
-        </a>
         <a class="nav-item" data-route="cards" onclick="FK.router.navigate('#cards')">
           <span class="nav-icon">🃏</span> 背诵卡片
         </a>
         <a class="nav-item" data-route="recite" onclick="FK.router.navigate('#recite')">
           <span class="nav-icon">🎯</span> 随机背诵
         </a>
-        <a class="nav-item" data-route="questions" onclick="FK.router.navigate('#questions')">
-          <span class="nav-icon">📋</span> 题库管理
+        <div style="border-top:1px solid rgba(255,255,255,0.08);margin:8px 0;"></div>
+        <a class="nav-item" data-route="dashboard" onclick="FK.router.navigate('#dashboard')">
+          <span class="nav-icon">📊</span> 仪表盘
+        </a>
+        <a class="nav-item" data-route="import" onclick="FK.router.navigate('#import')">
+          <span class="nav-icon">📥</span> 题库导入
         </a>
         <a class="nav-item" data-route="settings" onclick="FK.router.navigate('#settings')">
           <span class="nav-icon">⚙️</span> 设置
@@ -81,10 +67,6 @@
 
   <!-- ===== 数据文件 ===== -->
   <script src="data/subjects.js"></script>
-  <script src="data/questions-jurisprudence.js"></script>
-  <script src="data/questions-2025.js"></script>
-  <script src="data/questions-2024.js"></script>
-  <script src="data/questions-civil.js"></script>
   <script src="data/cards-xianfa2.js"></script>
 
   <!-- ===== 核心引擎 ===== -->
