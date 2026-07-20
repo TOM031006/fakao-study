@@ -349,15 +349,22 @@ FK.app = {
     this._renderCardList(sections);
   },
   _switchChapter(i){this._currentCardChapter=i;this._renderCardPage(document.getElementById('app-content'));},
+  _toggleSection(secId){const el=document.getElementById(secId);const arrow=document.getElementById(secId+'_arrow');if(!el||!arrow)return;const isHidden=el.style.display==='none';el.style.display=isHidden?'flex':'none';arrow.textContent=isHidden?'▼':'▶';},
   _setCardFilter(f){this._cardFilter=f;this._renderCardPage(document.getElementById('app-content'));},
 
   _renderCardList(sections) {
     const container=document.getElementById('cards-container');if(!container)return;
     const mastery=this._getCardMastery();let html='';
     for(const[sec,cards]of Object.entries(sections)){
-      html+=`<h3 style="margin:18px 0 8px;font-size:14px;color:var(--text-secondary);border-bottom:1px solid var(--border);padding-bottom:6px;">${sec}</h3><div style="display:flex;flex-direction:column;gap:12px;">`;
+      const secId='sec_'+sec.replace(/[^\w一-鿿]/g,'');
+      html+=`<h3 style="margin:18px 0 8px;font-size:14px;color:var(--text-secondary);border-bottom:1px solid var(--border);padding-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="FK.app._toggleSection('${secId}')">
+        <span id="${secId}_arrow" style="font-size:12px;transition:transform 0.2s;">▼</span> ${sec} (${cards.length}张)
+      </h3><div id="${secId}" style="display:flex;flex-direction:column;gap:12px;">`;
       cards.forEach(c=>{
         const concept=c.concept||'',cloze=c.content?.cloze||'',uid='crd_'+c.id,m=mastery[c.id]||0;
+        const customCloze=this._getCustomCloze();
+        const customAns=(customCloze._answers||{})[c.id];
+        const displayAns=customAns||(c.content?.answer||[])[0]||'暂无答案';
         const mColor=m>=2?'var(--success)':m===1?'var(--warning)':'var(--text-muted)';
         const mEmoji=m>=2?'⭐':m===1?'📖':'🆕';
         html+=`
@@ -372,7 +379,13 @@ FK.app = {
               </div>
             </div>
             <div id="${uid}-back" style="display:none;padding:18px;background:#fafafa;">
-              <div style="font-size:15px;line-height:2;white-space:pre-wrap;padding:12px;background:#f0fff0;border-radius:6px;border:1px solid var(--success);">${FK.utils.escapeHtml((c.content?.answer||[])[0]||'暂无答案')}</div>
+              <div style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">📋 ${FK.utils.escapeHtml(concept)}</div>
+              <div id="${uid}-answer-text" contenteditable="true" style="font-size:15px;line-height:2;white-space:pre-wrap;padding:12px;background:#f0fff0;border-radius:6px;border:1px solid var(--success);outline:none;">${FK.utils.escapeHtml(displayAns)}</div>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();FK.app._blankSelectedInCard('${uid}')">✂️ 挖空选中文字</button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();FK.app._undoBlankInCard('${uid}')">↩️ 撤销</button>
+                <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();FK.app._saveCardAnswer('${c.id}','${uid}')">💾 保存</button>
+              </div>
               ${cloze?`<div style="font-size:11px;color:var(--warning);font-weight:600;margin:10px 0 6px;">✍️ 填空自测（点击出答案）</div><div id="${uid}-cloze" data-cloze="${FK.utils.escapeHtml(cloze)}" style="font-size:14px;line-height:2.2;padding:10px;background:#fff;border-radius:6px;border:1px dashed var(--warning);white-space:pre-wrap;">${FK.app._renderClozeText(cloze,false)}</div>`:''}
               <div id="${uid}-hint" style="text-align:center;margin:8px 0;font-size:12px;color:var(--primary);cursor:pointer;" onclick="FK.app._flipCard('${uid}')">👆 点击填空显示答案</div>
               <div style="display:flex;gap:6px;margin-top:10px;">
@@ -399,7 +412,7 @@ FK.app = {
   _saveCustomCloze(d) { localStorage.setItem('fk_custom_cloze', JSON.stringify(d)); },
 
   _renderRecite(el) {
-    const allCards = [...(window.FK_SEED_DATA?.civilCh1Cards||[]), ...(window.FK_SEED_DATA?.civilCh2Cards||[])];
+    const allCards = [...(window.FK_SEED_DATA?.xianfaCards2||[])];
     if (!allCards.length) { el.innerHTML='<div class="empty-state"><div class="empty-icon">🎯</div><h2>暂无背诵卡片</h2></div>'; return; }
 
     // 随机打乱
@@ -425,8 +438,9 @@ FK.app = {
 
     const card = cards[idx];
     const concept = card.concept || '';
-    let answer = (card.content?.answer||[])[0] || '';
     const customCloze = this._getCustomCloze();
+    // 优先使用自定义保存的答案
+    let answer = (customCloze._answers||{})[card.id] || (card.content?.answer||[])[0] || '';
     const saved = customCloze[card.id] || [];
 
     // Apply saved blanks to answer text
@@ -460,7 +474,7 @@ FK.app = {
           ${!this._reciteRevealed ? `<div style="font-size:13px;color:var(--text-muted);margin-top:12px;">👇 点击下方查看答案</div>` : ''}
         </div>
 
-        <!-- 答案区（可点击挖空） -->
+        <!-- 答案区 -->
         <div class="card" style="padding:20px;min-height:100px;cursor:${this._reciteRevealed?'default':'pointer'};"
           onclick="${this._reciteRevealed ? '' : "FK.app._revealRecite()"}">
           ${!this._reciteRevealed ? `
@@ -469,11 +483,12 @@ FK.app = {
               <div>点击此处查看完整答案</div>
             </div>
           ` : `
-            <div id="recite-answer-text" style="font-size:15px;line-height:2.4;white-space:pre-wrap;padding:12px;background:#fff;border-radius:6px;border:1px solid var(--border);">${displayAnswer}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">📋 ${FK.utils.escapeHtml(concept)}</div>
+            <div id="recite-answer-text" contenteditable="true" style="font-size:15px;line-height:2.4;white-space:pre-wrap;padding:12px;background:#fff;border-radius:6px;border:1px solid var(--border);outline:none;">${displayAnswer}</div>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-sm btn-outline" onclick="FK.app._blankSelected()">✂️ 挖空选中文字</button>
               <button class="btn btn-sm btn-outline" onclick="FK.app._undoLastBlank()">↩️ 撤销</button>
-              <span style="font-size:12px;color:var(--text-muted);">选中文字→点按钮挖空</span>
+              <button class="btn btn-sm btn-primary" onclick="FK.app._saveEditedAnswer('${card.id}')">💾 保存修改</button>
             </div>
           `}
         </div>
@@ -561,6 +576,66 @@ FK.app = {
     custom[cardId] = blanked;
     this._saveCustomCloze(custom);
     FK.app._toast(`💾 已保存 ${blanked.length} 个挖空`, 'success');
+  },
+
+  // 背诵卡片中的编辑功能
+  _blankSelectedInCard(uid) {
+    const el = document.getElementById(uid+'-answer-text');
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed) { alert('请先选中要挖空的文字'); return; }
+    const range = sel.getRangeAt(0);
+    const text = range.toString().trim();
+    if (!text) return;
+    const span = document.createElement('span');
+    span.style.borderBottom='2px solid var(--warning)';span.style.padding='0 10px';span.style.color='var(--text-muted)';
+    span.textContent='（'+'_'.repeat(Math.max(2,text.length/2))+'）';
+    span.dataset.original=text;
+    range.deleteContents();range.insertNode(span);
+    sel.removeAllRanges();
+  },
+
+  _undoBlankInCard(uid) {
+    const el = document.getElementById(uid+'-answer-text');
+    if (!el) return;
+    const spans = el.querySelectorAll('span[data-original]');
+    if (!spans.length) return;
+    const last = spans[spans.length-1];
+    last.replaceWith(document.createTextNode(last.dataset.original));
+  },
+
+  _saveCardAnswer(cardId, uid) {
+    const textEl = document.getElementById(uid+'-answer-text');
+    if (!textEl) return;
+    // Extract blanks and answer text
+    const spans = textEl.querySelectorAll('span[data-original]');
+    const blanked = [];
+    spans.forEach(s => { blanked.push({text: s.dataset.original, idx: blanked.length}); });
+    const newAnswer = textEl.innerText || textEl.textContent || '';
+    // Save to custom cloze
+    const custom = this._getCustomCloze();
+    if (!custom._answers) custom._answers = {};
+    custom._answers[cardId] = newAnswer;
+    custom[cardId] = blanked;
+    this._saveCustomCloze(custom);
+    FK.app._toast('💾 已保存', 'success');
+    // Refresh
+    this._renderCardPage(document.getElementById('app-content'));
+  },
+
+  _saveEditedAnswer(cardId) {
+    const textEl = document.getElementById('recite-answer-text');
+    if (!textEl) return;
+    const newAnswer = textEl.innerText || textEl.textContent || '';
+    // Save to localStorage as custom answer
+    const custom = this._getCustomCloze();
+    if (!custom._answers) custom._answers = {};
+    custom._answers[cardId] = newAnswer;
+    this._saveCustomCloze(custom);
+    // Also update the card object in memory
+    const card = this._reciteCards.find(c => c.id === cardId);
+    if (card && card.content) card.content.answer = [newAnswer];
+    FK.app._toast('💾 答案已保存', 'success');
   },
 
   _resetReciteCloze() {
