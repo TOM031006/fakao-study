@@ -307,8 +307,9 @@ FK.app = {
   _saveCardMastery(d) { localStorage.setItem('fk_card_mastery', JSON.stringify(d)); },
 
   _renderCards(el) {
-    const xf2=window.FK_SEED_DATA?.xianfaCards2||[];
-    this._cardChapters=[{name:'宪法背诵',cards:xf2}].filter(c=>c.cards.length>0);
+    const xf2=[...(window.FK_SEED_DATA?.xianfaCards2||[]),...JSON.parse(localStorage.getItem('fk_extra_cards_xf')||'[]')];
+    const fl=[...(window.FK_SEED_DATA?.faliCards||[]),...JSON.parse(localStorage.getItem('fk_extra_cards_fl')||'[]')];
+    this._cardChapters=[{name:'宪法背诵',cards:xf2,key:'xf'},{name:'法理学背诵',cards:fl,key:'fl'}].filter(c=>c.cards.length>0);
     if(!this._cardChapters.length){el.innerHTML='<div class=\"empty-state\"><div class=\"empty-icon\">🃏</div><h2>暂无背诵卡片</h2></div>';return;}
     this._currentCardChapter=0; this._cardFilter='all'; this._renderCardPage(el);
   },
@@ -340,6 +341,7 @@ FK.app = {
         <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
           ${this._cardChapters.map((c,i)=>`<button class="btn btn-sm ${i===this._currentCardChapter?'btn-primary':'btn-outline'}" onclick="FK.app._switchChapter(${i})">${c.name.split(' ')[0]}</button>`).join('')}
           <span style="color:var(--border);">|</span>
+          <button class="btn btn-sm btn-outline" onclick="FK.app._showAddCardDialog()">➕ 添加卡片</button>
           <button class="btn btn-sm ${this._cardFilter==='all'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('all')">全部</button>
           <button class="btn btn-sm ${this._cardFilter==='learning'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('learning')">📖 不熟</button>
           <button class="btn btn-sm ${this._cardFilter==='mastered'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('mastered')">⭐ 熟练</button>
@@ -347,6 +349,102 @@ FK.app = {
         <div id="cards-container"></div>
       </div>`;
     this._renderCardList(sections);
+  },
+
+  _showAddCardDialog() {
+    const overlay=document.createElement('div');
+    overlay.className='modal-overlay';
+    overlay.innerHTML=`
+      <div class="modal" style="max-width:650px;">
+        <h3>➕ 添加背诵卡片</h3>
+        <div class="form-group"><label class="form-label">📚 章节</label>
+          <select class="form-select" id="add-card-chapter" onchange="FK.app._updateSectionOptions()">
+            <option value="xf">宪法背诵</option><option value="fl">法理学背诵</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">📂 小节（可选）</label>
+          <input class="form-input" id="add-card-section" placeholder="如：绪论 / 第一章第一节 宪法释义" list="section-list">
+          <datalist id="section-list"></datalist>
+        </div>
+        <div class="form-group"><label class="form-label">📋 题目</label><input class="form-input" id="add-card-title" placeholder="例如：宪法的特征"></div>
+        <div class="form-group"><label class="form-label">📝 答案</label><textarea class="form-textarea" id="add-card-answer" rows="10" placeholder="答案：宪法具有以下基本特征：&#10;第一，宪法是国家的根本法。&#10;第二，宪法是公民权利的保障书。&#10;第三，宪法是民主事实法律化的基本形式。"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">取消</button>
+          <button class="btn btn-primary" onclick="FK.app._addSingleCard()">📥 添加</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+    this._updateSectionOptions();
+  },
+
+  _updateSectionOptions() {
+    const chapter=document.getElementById('add-card-chapter')?.value||'xf';
+    const datalist=document.getElementById('section-list');
+    if(!datalist)return;
+    datalist.innerHTML='';
+    // Get existing sections from current cards
+    const cards=chapter==='xf'
+      ? [...(window.FK_SEED_DATA?.xianfaCards2||[]),...JSON.parse(localStorage.getItem('fk_extra_cards_xf')||'[]')]
+      : [...(window.FK_SEED_DATA?.faliCards||[]),...JSON.parse(localStorage.getItem('fk_extra_cards_fl')||'[]')];
+    const sections=new Set();
+    cards.forEach(c=>{if(c.section)sections.add(c.section);});
+    sections.forEach(s=>{const opt=document.createElement('option');opt.value=s;datalist.appendChild(opt);});
+  },
+
+  _addSingleCard() {
+    const chapter=document.getElementById('add-card-chapter')?.value||'xf';
+    const section=document.getElementById('add-card-section')?.value.trim()||'手动添加';
+    const title=document.getElementById('add-card-title')?.value.trim();
+    const answer=document.getElementById('add-card-answer')?.value.trim();
+    if(!title||!answer){alert('请填写题目和答案');return;}
+    const subject=chapter==='xf'?'宪法':'法理学';
+    const id='card_manual_'+Date.now();
+    const newCard={
+      id,subject, knowledgePoint:title,source:'手动添加',difficulty:2,type:'concept',examType:'subjective',
+      content:{stem:'❓ '+title,options:[],answer:[answer],explanation:answer,cloze:''},
+      section,concept:title,tags:['背诵卡片',subject,title],status:'未标记'
+    };
+    const key='fk_extra_cards_'+chapter;
+    const saved=JSON.parse(localStorage.getItem(key)||'[]');
+    saved.push(newCard);
+    localStorage.setItem(key,JSON.stringify(saved));
+    document.querySelector('.modal-overlay')?.remove();
+    FK.app._toast('✅ 已添加到'+(chapter==='xf'?'宪法背诵':'法理学背诵'),'success');
+    FK.app._renderCardPage(document.getElementById('app-content'));
+  },
+
+  _parseAndAddCards() {
+    const text=document.getElementById('add-cards-text')?.value.trim();
+    if(!text){alert('请粘贴卡片内容');return;}
+    // Split by blank lines, then parse each card
+    const blocks=text.split(/\n\n+/).filter(b=>b.trim());
+    const newCards=[];
+    for(const block of blocks){
+      const qMatch=block.match(/题目[：:]\s*(.+)/);
+      const aMatch=block.match(/答案[：:]\s*([\s\S]+)/);
+      if(!qMatch||!aMatch)continue;
+      const title=qMatch[1].trim();
+      const answer=aMatch[1].trim();
+      if(title.length<2||answer.length<10)continue;
+      const id='card_manual_'+Date.now()+'_'+newCards.length;
+      newCards.push({
+        id,subject:'宪法',knowledgePoint:title,source:'手动添加',difficulty:2,type:'concept',examType:'subjective',
+        content:{stem:'❓ '+title,options:[],answer:[answer],explanation:answer,cloze:''},
+        section:'手动添加',concept:title,tags:['背诵卡片','宪法',title],status:'未标记'
+      });
+    }
+    if(newCards.length===0){alert('未识别到有效卡片，请检查格式');return;}
+    // Merge into existing cards
+    const all=[...(window.FK_SEED_DATA?.xianfaCards2||[]),...newCards];
+    window.FK_SEED_DATA.xianfaCards2=all;
+    // Also save to localStorage for persistence
+    const saved=JSON.parse(localStorage.getItem('fk_extra_cards')||'[]');
+    saved.push(...newCards);
+    localStorage.setItem('fk_extra_cards',JSON.stringify(saved));
+    document.querySelector('.modal-overlay')?.remove();
+    FK.app._toast('✅ 已添加 '+newCards.length+' 张卡片','success');
+    FK.app._renderCardPage(document.getElementById('app-content'));
   },
   _switchChapter(i){this._currentCardChapter=i;this._renderCardPage(document.getElementById('app-content'));},
   _toggleSection(secId){const el=document.getElementById(secId);const arrow=document.getElementById(secId+'_arrow');if(!el||!arrow)return;const isHidden=el.style.display==='none';el.style.display=isHidden?'flex':'none';arrow.textContent=isHidden?'▼':'▶';},
@@ -364,7 +462,9 @@ FK.app = {
         const concept=c.concept||'',cloze=c.content?.cloze||'',uid='crd_'+c.id,m=mastery[c.id]||0;
         const customCloze=this._getCustomCloze();
         const customAns=(customCloze._answers||{})[c.id];
+        const customTitle=(customCloze._titles||{})[c.id];
         const displayAns=customAns||(c.content?.answer||[])[0]||'暂无答案';
+        const displayTitle=customTitle||concept;
         const mColor=m>=2?'var(--success)':m===1?'var(--warning)':'var(--text-muted)';
         const mEmoji=m>=2?'⭐':m===1?'📖':'🆕';
         html+=`
@@ -374,12 +474,12 @@ FK.app = {
                 <div style="display:flex;justify-content:center;align-items:center;gap:6px;margin-bottom:8px;">
                   <span style="font-size:12px;color:${mColor};">${mEmoji}</span><span style="font-size:11px;color:var(--text-muted);">${c.section||''}</span>
                 </div>
-                <div style="font-size:16px;font-weight:700;color:var(--text);line-height:1.5;">${FK.utils.escapeHtml(concept)}</div>
+                <div style="font-size:16px;font-weight:700;color:var(--text);line-height:1.5;">${FK.utils.escapeHtml(displayTitle)}</div>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:10px;">点击翻转 →</div>
               </div>
             </div>
             <div id="${uid}-back" style="display:none;padding:18px;background:#fafafa;">
-              <div style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">📋 ${FK.utils.escapeHtml(concept)}</div>
+              <div id="${uid}-title-text" contenteditable="true" style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:10px;padding:6px 8px;border-bottom:1px solid var(--border);outline:none;border-radius:4px;">📋 ${FK.utils.escapeHtml(displayTitle)}</div>
               <div id="${uid}-answer-text" contenteditable="true" style="font-size:15px;line-height:2;white-space:pre-wrap;padding:12px;background:#f0fff0;border-radius:6px;border:1px solid var(--success);outline:none;">${FK.utils.escapeHtml(displayAns)}</div>
               <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
                 <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();FK.app._blankSelectedInCard('${uid}')">✂️ 挖空选中文字</button>
@@ -606,17 +706,23 @@ FK.app = {
 
   _saveCardAnswer(cardId, uid) {
     const textEl = document.getElementById(uid+'-answer-text');
+    const titleEl = document.getElementById(uid+'-title-text');
     if (!textEl) return;
     // Extract blanks and answer text
     const spans = textEl.querySelectorAll('span[data-original]');
     const blanked = [];
     spans.forEach(s => { blanked.push({text: s.dataset.original, idx: blanked.length}); });
     const newAnswer = textEl.innerText || textEl.textContent || '';
+    const newTitle = (titleEl?.innerText||titleEl?.textContent||'').replace(/^📋\s*/,'').trim();
     // Save to custom cloze
     const custom = this._getCustomCloze();
     if (!custom._answers) custom._answers = {};
     custom._answers[cardId] = newAnswer;
     custom[cardId] = blanked;
+    if (newTitle) {
+      if (!custom._titles) custom._titles = {};
+      custom._titles[cardId] = newTitle;
+    }
     this._saveCustomCloze(custom);
     FK.app._toast('💾 已保存', 'success');
     // Refresh
