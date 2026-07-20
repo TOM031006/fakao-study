@@ -307,8 +307,8 @@ FK.app = {
   _saveCardMastery(d) { localStorage.setItem('fk_card_mastery', JSON.stringify(d)); },
 
   _renderCards(el) {
-    const ch1=window.FK_SEED_DATA?.civilCh1Cards||[], ch2=window.FK_SEED_DATA?.civilCh2Cards||[];
-    this._cardChapters=[{name:'第一章 民法概述',cards:ch1},{name:'第二章 基本原则',cards:ch2}].filter(c=>c.cards.length>0);
+    const xf2=window.FK_SEED_DATA?.xianfaCards2||[];
+    this._cardChapters=[{name:'宪法背诵',cards:xf2}].filter(c=>c.cards.length>0);
     if(!this._cardChapters.length){el.innerHTML='<div class=\"empty-state\"><div class=\"empty-icon\">🃏</div><h2>暂无背诵卡片</h2></div>';return;}
     this._currentCardChapter=0; this._cardFilter='all'; this._renderCardPage(el);
   },
@@ -317,7 +317,7 @@ FK.app = {
     const mastery=this._getCardMastery();
     const ch=this._cardChapters[this._currentCardChapter];
     let filtered=ch.cards;
-    if(this._cardFilter==='learning') filtered=ch.cards.filter(c=>!mastery[c.id]||mastery[c.id]<2);
+    if(this._cardFilter==='learning') filtered=ch.cards.filter(c=>mastery[c.id]===1); // 只显示主动点了"不熟"的
     if(this._cardFilter==='mastered') filtered=ch.cards.filter(c=>mastery[c.id]>=2);
     const mastered=ch.cards.filter(c=>mastery[c.id]>=2).length;
     const learning=ch.cards.filter(c=>mastery[c.id]===1).length;
@@ -331,7 +331,7 @@ FK.app = {
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
             <div>
               <div style="font-size:17px;font-weight:700;">${ch.name}</div>
-              <div style="font-size:12px;color:var(--text-muted);">${filtered.length}张 · ${mastered}已掌握 · ${learning}学习中</div>
+              <div style="font-size:12px;color:var(--text-muted);">${filtered.length}张 · ${mastered}熟练 · ${learning}不熟</div>
             </div>
             <div style="text-align:right;"><div style="font-size:26px;font-weight:700;color:${pct>=70?'var(--success)':pct>=30?'var(--warning)':'var(--text-muted)'};">${pct}%</div><div style="font-size:10px;color:var(--text-muted);">掌握度</div></div>
           </div>
@@ -341,8 +341,8 @@ FK.app = {
           ${this._cardChapters.map((c,i)=>`<button class="btn btn-sm ${i===this._currentCardChapter?'btn-primary':'btn-outline'}" onclick="FK.app._switchChapter(${i})">${c.name.split(' ')[0]}</button>`).join('')}
           <span style="color:var(--border);">|</span>
           <button class="btn btn-sm ${this._cardFilter==='all'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('all')">全部</button>
-          <button class="btn btn-sm ${this._cardFilter==='learning'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('learning')">🟡 学习中</button>
-          <button class="btn btn-sm ${this._cardFilter==='mastered'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('mastered')">🟢 已掌握</button>
+          <button class="btn btn-sm ${this._cardFilter==='learning'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('learning')">📖 不熟</button>
+          <button class="btn btn-sm ${this._cardFilter==='mastered'?'btn-primary':'btn-outline'}" onclick="FK.app._setCardFilter('mastered')">⭐ 熟练</button>
         </div>
         <div id="cards-container"></div>
       </div>`;
@@ -372,12 +372,12 @@ FK.app = {
               </div>
             </div>
             <div id="${uid}-back" style="display:none;padding:18px;background:#fafafa;">
-              ${cloze?`<div style="font-size:11px;color:var(--warning);font-weight:600;margin-bottom:6px;">✍️ 填空自测</div><div id="${uid}-cloze" data-cloze="${FK.utils.escapeHtml(cloze)}" style="font-size:15px;line-height:2.2;padding:12px;background:#fff;border-radius:6px;border:1px dashed var(--warning);white-space:pre-wrap;">${FK.app._renderClozeText(cloze,false)}</div>`:''}
-              <div id="${uid}-hint" style="text-align:center;margin:8px 0;font-size:12px;color:var(--primary);cursor:pointer;" onclick="FK.app._flipCard('${uid}')">👆 点击显示答案</div>
+              <div style="font-size:15px;line-height:2;white-space:pre-wrap;padding:12px;background:#f0fff0;border-radius:6px;border:1px solid var(--success);">${FK.utils.escapeHtml((c.content?.answer||[])[0]||'暂无答案')}</div>
+              ${cloze?`<div style="font-size:11px;color:var(--warning);font-weight:600;margin:10px 0 6px;">✍️ 填空自测（点击出答案）</div><div id="${uid}-cloze" data-cloze="${FK.utils.escapeHtml(cloze)}" style="font-size:14px;line-height:2.2;padding:10px;background:#fff;border-radius:6px;border:1px dashed var(--warning);white-space:pre-wrap;">${FK.app._renderClozeText(cloze,false)}</div>`:''}
+              <div id="${uid}-hint" style="text-align:center;margin:8px 0;font-size:12px;color:var(--primary);cursor:pointer;" onclick="FK.app._flipCard('${uid}')">👆 点击填空显示答案</div>
               <div style="display:flex;gap:6px;margin-top:10px;">
-                <button class="btn btn-sm" style="flex:1;background:${m===2?'var(--success)':'var(--bg)'};color:${m===2?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',2)">⭐ 会了</button>
+                <button class="btn btn-sm" style="flex:1;background:${m===2?'var(--success)':'var(--bg)'};color:${m===2?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',2)">⭐ 熟练</button>
                 <button class="btn btn-sm" style="flex:1;background:${m===1?'var(--warning)':'var(--bg)'};color:${m===1?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',1)">📖 不熟</button>
-                <button class="btn btn-sm" style="flex:1;background:${m===0?'var(--error)':'var(--bg)'};color:${m===0?'#fff':'var(--text)'};" onclick="event.stopPropagation();FK.app._rateCard('${c.id}',0)">🔄 重学</button>
               </div>
             </div>
           </div>`;
@@ -388,7 +388,7 @@ FK.app = {
     if(!document.getElementById('flashcard-styles')){const s=document.createElement('style');s.id='flashcard-styles';s.textContent='.flashcard:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}';document.head.appendChild(s);}
   },
 
-  _rateCard(cardId,level){const m=this._getCardMastery();m[cardId]=level;this._saveCardMastery(m);this._renderCardPage(document.getElementById('app-content'));FK.app._toast(level>=2?'⭐ 已掌握！':level===1?'📖 继续加油':'🔄 重新学习',level>=2?'success':level===1?'warning':'info');},
+  _rateCard(cardId,level){const m=this._getCardMastery();m[cardId]=level;this._saveCardMastery(m);this._renderCardPage(document.getElementById('app-content'));FK.app._toast(level>=2?'⭐ 已标记熟练':level===1?'📖 已标记不熟，下次复习':'','success');},
 
   _flipCard(uid){const f=document.getElementById(uid+'-front'),b=document.getElementById(uid+'-back'),c=document.getElementById(uid+'-cloze'),h=document.getElementById(uid+'-hint');if(!f||!b)return;if(b.style.display==='none'){f.style.display='none';b.style.display='block';if(h)h.style.display='block';}else if(c&&c.dataset.revealed!=='true'){c.innerHTML=FK.app._renderClozeText(c.dataset.cloze||'',true);c.dataset.revealed='true';if(h)h.style.display='none';}else{b.style.display='none';f.style.display='flex';if(c){c.dataset.revealed='false';c.innerHTML=FK.app._renderClozeText(c.dataset.cloze||'',false);}if(h)h.style.display='block';}},
 
